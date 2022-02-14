@@ -19,7 +19,27 @@ def search(token, api_url, query, entries):
     'Content-Type': 'application/json'
   }
 
-  data = f'{{ "query": "{{ search(query:\\"{query}\\") {{ entries {{ { ", ".join(entries) } }} }} }}" }}'
+  args = {
+    'query': query,
+    'entries': ','.join(entries)
+  }
 
-  response = requests.post(f'{api_url}/graphql', data=data, headers=headers)
+  # data = f'{{ query: "{{ search(query:\\"{query}\\") {{ entries {{ { ", ".join(entries) } }}, cursor }} }}" }}'
+  gql_query = """{{
+    query: "{{
+      search(query:\\"{query}\\") {{
+        entries {{
+          {entries}
+        }},
+        cursor
+      }}
+    }}"
+  }}""".format(**args)
+
+  response = requests.post(
+    f'{api_url}/graphql',
+    data=gql_query,
+    headers=headers)
+
   return response.json()
+

@@ -14,7 +14,7 @@ class TestCluedIn:
     # Act
     token = cluedin.get_token(username, password, org_name, auth_url)
     # Assert
-    assert len(token) == 2831
+    assert len(token) > 2000
 
   def test_search(self):
     # Arrange
@@ -25,6 +25,6 @@ class TestCluedIn:
     api_url = os.environ.get('API_URL')
     token = cluedin.get_token(username, password, org_name, auth_url)
     # Act
-    result = cluedin.search(token, api_url, "*", ['id', 'name'])
+    result = cluedin.search(token, api_url, query="*", entries=['id', 'name'])
     # Assert
     assert len(result['data']['search']['entries']) == 20

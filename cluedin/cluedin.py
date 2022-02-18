@@ -74,7 +74,12 @@ def rule_json_to_querybuilder(rule_json, property_map):
   if 'field' in result and result['field'] in property_map:
     result['field'] = property_map[result['field']]
 
-  result['rules'] = list(map(rule_json_to_querybuilder, result['rules'], repeat(property_map)))
+  if 'type' not in result or result['type'] == 'rule':
+    result['rules'] = list(map(rule_json_to_querybuilder, result['rules'], repeat(property_map)))
+  else:
+    result['input'] = 'text'
+    result.pop('rules', None)
+
 
   return result
 

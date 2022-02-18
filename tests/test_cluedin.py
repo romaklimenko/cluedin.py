@@ -8,27 +8,23 @@ from json import dumps
 from dotenv import load_dotenv
 load_dotenv()
 
-
+def get_token():
+  username = os.environ.get('USER')
+  password = os.environ.get('PASSWORD')
+  org_name = os.environ.get('ORGANIZATION')
+  auth_url = os.environ.get('AUTH_URL')
+  return cluedin.get_token(username, password, org_name, auth_url)
 class TestCluedIn:
-  def xtest_get_a_token(self):
-    # Arrange
-    username = os.environ.get('USER')
-    password = os.environ.get('PASSWORD')
-    org_name = os.environ.get('ORGANIZATION')
-    auth_url = os.environ.get('AUTH_URL')
+  def test_get_a_token(self):
     # Act
-    token = cluedin.get_token(username, password, org_name, auth_url)
+    token = get_token()
     # Assert
     assert len(token) > 2000
 
-  def xtest_search(self):
+  def test_search(self):
     # Arrange
-    username = os.environ.get('USER')
-    password = os.environ.get('PASSWORD')
-    org_name = os.environ.get('ORGANIZATION')
-    auth_url = os.environ.get('AUTH_URL')
     api_url = os.environ.get('API_URL')
-    token = cluedin.get_token(username, password, org_name, auth_url)
+    token = get_token()
     # Act
     result = cluedin.search(
       token, api_url, query="*", entries=['id', 'name'])
@@ -158,9 +154,9 @@ class TestCluedIn:
               'field': 'EntityType',
               'id': '4118f2e7-8b85-4386-9b12-080a9f97717f',
               'operator': 'equal',
-              'rules': [],
               'type': 'string',
-              'value': '/Infrastructure/User'
+              'value': '/Infrastructure/User',
+              'input': 'text'
             }
           ],
           'type': 'rule',
@@ -174,70 +170,116 @@ class TestCluedIn:
               'field': 'birthYear',
               'id': '01323e3e-77c1-43ed-9151-3f7a1975e872',
               'operator': 'equal',
-              'rules': [],
               'type': 'string',
-              'value': '\\N'
+              'value': '\\N',
+              'input': 'text'
             },
             {
               'condition': 'AND',
               'field': 'deathYear',
               'id': 'b34ce52c-9201-4054-8314-a2ceaf2a0cc2',
               'operator': 'equal',
-              'rules': [],
               'type': 'string',
-              'value': '\\N'
+              'value': '\\N',
+              'input': 'text'
             }
           ],
           'type': 'rule',
         }
       ]
     }
+
     # Act
     result = cluedin.rule_json_to_querybuilder(rule_json['conditions'], property_map)
+    
     # Assert
-    assert dumps(result) == dumps(expected_querybuilder_json)
+    assert dumps(result) == dumps(expected_querybuilder_json), \
+      'Querybuilder json does not match expected JSON'
 
     evaluator = Evaluator(result)
 
-    shall_pass_one = {
-      'EntityType': '/Infrastructure/User',
-      'birthYear': '\\N',
-      'deathYear': '2001'
-    }
+    test_objects = [
+      {
+        'EntityType': '/Infrastructure/User',
+        'birthYear': '\\N',
+        'deathYear': '\\N',
+        'shouldPass': True
+      },
+      {
+        'EntityType': '/Infrastructure/User',
+        'birthYear': '1809',
+        'deathYear': '1865',
+        'shouldPass': False
+      },
+      {
+        'EntityType': '/Infrastructure/Organization',
+        'birthYear': '0',
+        'deathYear': '0',
+        'shouldPass': False
+      }
+    ]
 
-    shall_pass_two = {
-      'EntityType': '/Infrastructure/User',
-      'birthYear': '1981',
-      'deathYear': '\\N'
-    }
+    for object in test_objects:
+      if object['shouldPass']:
+        assert evaluator.object_matches_rules(object), \
+          f'{object["EntityType"]}, {object["birthYear"]}, {object["deathYear"]} should have passed'
+      else:
+        assert not evaluator.object_matches_rules(object), \
+          f'{object["EntityType"]}, {object["birthYear"]}, {object["deathYear"]} should not have passed'
 
-    shall_not_pass = {
-      'EntityType': '/Infrastructure/Organization',
-      'birthYear': '1809',
-      'deathYear': '1865'
-    }
-
-    objects = [shall_pass_one, shall_pass_two, shall_not_pass]
-    assert evaluator.get_matching_objects(objects) == [shall_pass_one, shall_pass_two]
-
-  def xtest_run_rules(self):
+  def test_run_rules(self):
     # Arrange
     rule_id = '8a479e5b-919f-4aa7-9862-1045b6eaedcf'
-    username = os.environ.get('USER')
-    password = os.environ.get('PASSWORD')
-    org_name = os.environ.get('ORGANIZATION')
-    auth_url = os.environ.get('AUTH_URL')
     api_url = os.environ.get('API_URL')
-    token = cluedin.get_token(username, password, org_name, auth_url)
+    token = get_token()
     # Act
     rule = cluedin.get_rule(token, api_url, rule_id)
 
-    # must be:
+    property_map = {
+      'Properties[IMDb.name.basic.BirthYear]': 'birthYear',
+      'Properties[IMDb.name.basic.DeathYear]': 'deathYear',
+    }
+
+    rule_set = cluedin.rule_json_to_querybuilder(rule['conditions'], property_map)
+
+    evaluator = Evaluator(rule_set)
+
+    object_1 = {
+      'EntityType': '/Infrastructure/User',
+      'birthYear': '\\N',
+      'deathYear': '\\N',
+      'shouldPass': True
+    }
+    
+    object_2 = {
+      'EntityType': '/Infrastructure/User',
+      'birthYear': '1809',
+      'deathYear': '1865',
+      'shouldPass': False
+    }
+
+    object_3 = {
+      'EntityType': '/Infrastructure/Organization',
+      'birthYear': '0',
+      'deathYear': '0',
+      'shouldPass': False
+    }
+
+    objects = [object_1, object_2, object_3]
+
+    # Assert
+    assert rule['id'] == rule_id
+    assert evaluator.get_matching_objects(objects) == [object_1]
+
+  def test_run_sample_rules(self):
+    # https://github.com/shunyeka/jQuery-QueryBuilder-Python-Evaluator
+
+    # Arrange
     rule_json = {
       "condition": "AND",
       "rules": [
         {
-          "id": "tagname",
+          "id": "",
           "field": "tags.name",
           "type": "string",
           "input": "text",
@@ -245,7 +287,7 @@ class TestCluedIn:
           "value": "production"
         },
         {
-          "id": "tagname",
+          "id": "",
           "field": "tags.name",
           "type": "string",
           "input": "text",
@@ -256,7 +298,7 @@ class TestCluedIn:
           "condition": "OR",
           "rules": [
             {
-              "id": "type",
+              "id": "",
               "field": "type",
               "type": "string",
               "input": "text",
@@ -264,7 +306,7 @@ class TestCluedIn:
               "value": "ec2"
             },
             {
-              "id": "type",
+              "id": "",
               "field": "type",
               "type": "string",
               "input": "text",
@@ -277,12 +319,26 @@ class TestCluedIn:
     }
 
     evaluator = Evaluator(rule_json)
-    object_1 = {'type': "ec2", "tags": [
-        {"name": "hello"}, {"name": "asdfasfproduction_instance"}]}
-    object_2 = {'type': "ami", "tags": [{"name": "development"}, {
-        "name": "asfdafdroduction_instance"}, {"name": "proction"}]}
+    object_1 = {
+      'type': "ec2",
+      "tags": [
+        { "name": "hello" },
+        { "name": "asdfasfproduction_instance" }
+      ]
+    }
+    object_2 = {
+      'type': "ami",
+      "tags": [
+        { "name": "development" },
+        { "name": "asfdafdroduction_instance" },
+        { "name": "proction" }
+      ]
+    }
     objects = [object_1, object_2]
 
+    # Act
+    matching_objects = evaluator.get_matching_objects(objects)
+
     # Assert
-    assert rule['id'] == rule_id
-    assert evaluator.get_matching_objects(objects) == [object_2]
+    assert matching_objects == [object_2]
+
